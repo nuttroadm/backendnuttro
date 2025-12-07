@@ -327,7 +327,8 @@ async def create_refeicao(
                     "nome": paciente.nome,
                     "objetivo": paciente.objetivo
                 },
-                meal_plan=None  # Pode ser expandido no futuro
+                meal_plan=None,  # Pode ser expandido no futuro
+                descricao=data.descricao  # Descrição fornecida pelo usuário
             )
             
             refeicao.itens_identificados = analysis.get("itens", [])
@@ -348,13 +349,24 @@ async def create_refeicao(
     return {
         "id": str(refeicao.id),
         "tipo": refeicao.tipo,
-        "data_hora": refeicao.data_hora.isoformat(),
-        "itens": refeicao.itens_identificados,
-        "macros": refeicao.macros,
-        "calorias": refeicao.calorias_estimadas,
-        "feedback": refeicao.feedback_ia,
-        "sugestoes": refeicao.sugestoes_ia,
-        "alinhamento": refeicao.alinhamento_plano
+        "data_hora": refeicao.data_hora.isoformat() if refeicao.data_hora else None,
+        "foto_base64": refeicao.foto_base64,  # Incluir foto para exibir no histórico
+        "itens": refeicao.itens_identificados or [],
+        "macros": refeicao.macros or {},
+        "calorias": refeicao.calorias_estimadas or 0,
+        "calorias_estimadas": refeicao.calorias_estimadas or 0,  # Alias para compatibilidade
+        "feedback": refeicao.feedback_ia or "",
+        "sugestoes": refeicao.sugestoes_ia or [],
+        "alinhamento": refeicao.alinhamento_plano or "atencao",
+        "analise_ia": {  # Formato completo para o frontend
+            "itens": refeicao.itens_identificados or [],
+            "porcoes": refeicao.porcoes or {},
+            "macros": refeicao.macros or {},
+            "calorias_estimadas": refeicao.calorias_estimadas or 0,
+            "feedback": refeicao.feedback_ia or "",
+            "sugestoes": refeicao.sugestoes_ia or [],
+            "alinhamento_plano": refeicao.alinhamento_plano or "atencao"
+        }
     }
 
 @app_router.get("/refeicoes")
@@ -374,10 +386,21 @@ async def get_refeicoes(
         "id": str(r.id),
         "tipo": r.tipo,
         "data_hora": r.data_hora.isoformat() if r.data_hora else None,
-        "itens": r.itens_identificados,
-        "calorias": r.calorias_estimadas,
-        "alinhamento": r.alinhamento_plano,
-        "feedback": r.feedback_ia
+        "foto_base64": r.foto_base64,  # Incluir foto para exibir no histórico
+        "itens": r.itens_identificados or [],
+        "calorias": r.calorias_estimadas or 0,
+        "calorias_estimadas": r.calorias_estimadas or 0,  # Alias
+        "alinhamento": r.alinhamento_plano or "atencao",
+        "feedback": r.feedback_ia or "",
+        "analise_ia": {  # Formato completo
+            "itens": r.itens_identificados or [],
+            "porcoes": r.porcoes or {},
+            "macros": r.macros or {},
+            "calorias_estimadas": r.calorias_estimadas or 0,
+            "feedback": r.feedback_ia or "",
+            "sugestoes": r.sugestoes_ia or [],
+            "alinhamento_plano": r.alinhamento_plano or "atencao"
+        }
     } for r in refeicoes]
 
 @app_router.post("/chat")

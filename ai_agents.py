@@ -243,26 +243,47 @@ class MealAnalysisAgent:
         self.parser = JsonOutputParser(pydantic_object=MealAnalysisResult)
     
     async def _describe_image_with_vision(self, image_base64: str) -> str:
-        """Usa uma API de visão para descrever a imagem"""
+        """Usa Google Vision API para descrever a imagem com precisão"""
         try:
             # Limpar base64
             if 'base64,' in image_base64:
                 image_base64 = image_base64.split('base64,')[1]
             
-            # Usar Groq para descrever a imagem baseado no base64
-            # Nota: Groq não suporta visão diretamente, então vamos usar uma abordagem alternativa
-            # Em produção, você pode usar Google Vision API, AWS Rekognition, ou similar
+            # Tentar usar Google Vision API se disponível
+            try:
+                from google.cloud import vision
+                import base64 as b64
+                
+                # Verificar se há credenciais configuradas
+                vision_client = vision.ImageAnnotatorClient()
+                
+                # Decodificar imagem
+                image_content = b64.b64decode(image_base64)
+                image = vision.Image(content=image_content)
+                
+                # Detectar objetos e texto
+                response = vision_client.label_detection(image=image, max_results=10)
+                labels = [label.description for label in response.label_annotations]
+                
+                # Detectar texto (rótulos, ingredientes)
+                text_response = vision_client.text_detection(image=image)
+                texts = [text.description for text in text_response.text_annotations]
+                
+                # Combinar informações
+                description = f"Alimentos identificados: {', '.join(labels[:5])}"
+                if texts:
+                    description += f"\nTexto visível: {texts[0][:200]}"
+                
+                return description
+                
+            except ImportError:
+                logger.warning("Google Vision API não disponível. Usando análise textual.")
+            except Exception as e:
+                logger.warning(f"Erro ao usar Google Vision: {e}. Usando análise textual.")
             
-            # Por enquanto, vamos pedir ao Groq para inferir baseado em uma descrição genérica
-            # e usar o contexto da imagem (que será processado pelo frontend)
-            description_prompt = f"""Descreva detalhadamente uma refeição baseado na imagem fornecida.
-            Liste todos os alimentos visíveis, suas quantidades aproximadas, e características visuais.
-            Seja específico sobre tipos de alimentos, métodos de preparo, e quantidades."""
-            
-            # Como Groq não suporta imagens diretamente, vamos usar uma abordagem híbrida
-            # O frontend pode enviar uma descrição textual junto com a imagem
-            # Por enquanto, vamos retornar uma descrição genérica que será melhorada
-            return "Refeição fotografada - análise em andamento"
+            # Fallback: Pedir ao Groq para analisar baseado em características da imagem
+            # Vamos usar uma abordagem onde o frontend pode enviar uma descrição inicial
+            return "Imagem de alimento/refeição - análise detalhada necessária"
             
         except Exception as e:
             logger.error(f"Erro ao descrever imagem: {e}")
@@ -272,7 +293,8 @@ class MealAnalysisAgent:
         self, 
         image_base64: str, 
         patient_context: Dict, 
-        meal_plan: Dict = None
+        meal_plan: Dict = None,
+        descricao: str = None
     ) -> Dict[str, Any]:
         """Analisa uma imagem de refeição usando Groq com descrição textual"""
         
