@@ -231,12 +231,14 @@ async def create_refeicao(
     if data.foto_base64:
         try:
             agent = get_meal_analysis_agent()
+            # Passar descrição se disponível (pode ser gerada pelo frontend)
             analysis = await agent.analyze(
                 image_base64=data.foto_base64,
                 patient_context={
                     "nome": paciente.nome,
                     "objetivo": paciente.objetivo
-                }
+                },
+                meal_plan=None  # Pode ser expandido no futuro
             )
             
             refeicao.itens_identificados = analysis.get("itens", [])
