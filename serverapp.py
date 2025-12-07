@@ -20,7 +20,7 @@ from ai_agents import (
     get_patient_chat_agent
 )
 from shared import (
-    get_current_paciente, paciente_to_dict, PacienteCreate,
+    get_current_paciente, paciente_to_dict, PacienteCreate, LoginRequest,
     validate_cpf, get_password_hash, create_access_token, verify_password
 )
 from pydantic import BaseModel
