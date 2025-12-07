@@ -981,16 +981,37 @@ async def create_consulta(
 ):
     """Criar nova consulta"""
     try:
-        # Verificar se paciente existe
+        # Buscar paciente (sem verificar nutricionista_id ainda)
         result = await db.execute(
             select(Paciente).where(
-                Paciente.id == uuid.UUID(consulta_create.paciente_id),
-                Paciente.nutricionista_id == nutricionista.id
+                Paciente.id == uuid.UUID(consulta_create.paciente_id)
             )
         )
         paciente = result.scalar_one_or_none()
         if not paciente:
             raise HTTPException(status_code=404, detail="Paciente não encontrado")
+        
+        # OPÇÃO 1: Transferência Automática na Primeira Consulta
+        # Se o paciente está associado ao admin (auto-registrado), transferir automaticamente
+        # para o nutricionista que está criando a consulta
+        admin_result = await db.execute(
+            select(Nutricionista).where(Nutricionista.email == "admin@nuttro.com")
+        )
+        admin_nutricionista = admin_result.scalar_one_or_none()
+        
+        if admin_nutricionista and paciente.nutricionista_id == admin_nutricionista.id:
+            # Paciente auto-registrado: transferir para o nutricionista atual
+            logger.info(f"🔄 Transferindo paciente {paciente.nome} (ID: {paciente.id}) do admin para nutricionista {nutricionista.nome} (ID: {nutricionista.id})")
+            paciente.nutricionista_id = nutricionista.id
+            await db.commit()
+            await db.refresh(paciente)
+            logger.info(f"✅ Paciente transferido com sucesso. Histórico preservado.")
+        elif paciente.nutricionista_id != nutricionista.id:
+            # Paciente pertence a outro nutricionista
+            raise HTTPException(
+                status_code=403, 
+                detail="Este paciente pertence a outro nutricionista"
+            )
         
         nova_consulta = Consulta(
             nutricionista_id=nutricionista.id,
