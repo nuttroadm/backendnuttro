@@ -186,13 +186,23 @@ async def create_checkin(
     # Converter data para apenas dia (sem hora) para comparação
     checkin_date_only = checkin_date.date()
     
+    # Buscar check-ins recentes do paciente (últimos 7 dias para otimizar)
     result = await db.execute(
-        select(CheckIn).where(
-            CheckIn.paciente_id == paciente.id,
-            func.date(CheckIn.data) == checkin_date_only
-        )
+        select(CheckIn).where(CheckIn.paciente_id == paciente.id)
+        .order_by(CheckIn.created_at.desc())
+        .limit(7)
     )
-    existing_checkin = result.scalar_one_or_none()
+    recent_checkins = result.scalars().all()
+    
+    # Verificar se há check-in na mesma data
+    existing_checkin = None
+    for checkin in recent_checkins:
+        if checkin.data:
+            # Converter datetime para date para comparação
+            checkin_date_check = checkin.data.date() if hasattr(checkin.data, 'date') else checkin.data
+            if isinstance(checkin_date_check, type(checkin_date_only)) and checkin_date_check == checkin_date_only:
+                existing_checkin = checkin
+                break
     
     if existing_checkin:
         raise HTTPException(
