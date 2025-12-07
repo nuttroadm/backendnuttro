@@ -37,9 +37,9 @@ else:
     logger.info(f"✅ GROQ_API_KEY configurada (primeiros 10 chars: {GROQ_API_KEY[:10]}...)")
 
 # Modelos Groq
-# Para análise de imagens, usamos um modelo que suporta visão ou processamos a imagem separadamente
-GROQ_MODEL_TEXT = "llama-3.1-70b-versatile"  # Modelo rápido para texto
-GROQ_MODEL_VISION = "llama-3.1-70b-versatile"  # Para imagens, vamos usar descrição textual
+# Modelos atualizados (llama-3.1-70b-versatile foi descontinuado)
+GROQ_MODEL_TEXT = "llama-3.1-8b-instant"  # Modelo rápido e eficiente para texto
+GROQ_MODEL_VISION = "llama-3.1-8b-instant"  # Para imagens, vamos usar descrição textual
 
 # ============================================
 # STATE SCHEMAS

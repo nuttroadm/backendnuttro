@@ -77,8 +77,11 @@ async def mobile_dashboard(
     paciente: Paciente = Depends(get_current_paciente),
     db: AsyncSession = Depends(get_db)
 ):
-    """Dashboard do paciente no app"""
-    # Calcular estatísticas
+    """Dashboard do paciente no app com estatísticas completas"""
+    from models import Consulta
+    from sqlalchemy import cast, Date
+    
+    # Calcular estatísticas básicas
     result = await db.execute(
         select(func.count(CheckIn.id)).where(CheckIn.paciente_id == paciente.id)
     )
@@ -89,6 +92,11 @@ async def mobile_dashboard(
     )
     total_refeicoes = result.scalar() or 0
     
+    result = await db.execute(
+        select(func.count(Consulta.id)).where(Consulta.paciente_id == paciente.id)
+    )
+    consultas_realizadas = result.scalar() or 0
+    
     from models import Meta
     result = await db.execute(
         select(func.count(Meta.id)).where(
@@ -96,7 +104,41 @@ async def mobile_dashboard(
             Meta.status == 'concluida'
         )
     )
-    metas_concluidas = result.scalar() or 0
+    metas_atingidas = result.scalar() or 0
+    
+    # Calcular médias dos últimos 30 check-ins
+    result = await db.execute(
+        select(CheckIn).where(CheckIn.paciente_id == paciente.id)
+        .order_by(CheckIn.created_at.desc()).limit(30)
+    )
+    recent_checkins = result.scalars().all()
+    
+    # Calcular médias
+    if recent_checkins:
+        consistencia_sum = sum(c.consistencia_plano or 0 for c in recent_checkins if c.consistencia_plano)
+        frequencia_sum = sum(c.frequencia_refeicoes or 0 for c in recent_checkins if c.frequencia_refeicoes)
+        vegetais_sum = sum(c.vegetais_frutas or 0 for c in recent_checkins if c.vegetais_frutas)
+        liquido_sum = sum(c.ingestao_liquido or 0 for c in recent_checkins if c.ingestao_liquido)
+        energia_sum = sum(c.energia_fisica or 0 for c in recent_checkins if c.energia_fisica)
+        sono_sum = sum(c.qualidade_sono or 0 for c in recent_checkins if c.qualidade_sono)
+        confianca_sum = sum(c.confianca_jornada or 0 for c in recent_checkins if c.confianca_jornada)
+        
+        count = len(recent_checkins)
+        consistencia_mensal = (consistencia_sum / count) if count > 0 else 0
+        frequencia_refeicoes_media = (frequencia_sum / count) if count > 0 else 0
+        vegetais_frutas_media = (vegetais_sum / count) if count > 0 else 0
+        ingestao_liquido_media = (liquido_sum / count) if count > 0 else 0
+        energia_fisica_media = (energia_sum / count) if count > 0 else 0
+        qualidade_sono_media = (sono_sum / count) if count > 0 else 0
+        confianca_jornada_media = (confianca_sum / count) if count > 0 else 0
+    else:
+        consistencia_mensal = 0
+        frequencia_refeicoes_media = 0
+        vegetais_frutas_media = 0
+        ingestao_liquido_media = 0
+        energia_fisica_media = 0
+        qualidade_sono_media = 0
+        confianca_jornada_media = 0
     
     # Buscar último check-in
     result = await db.execute(
@@ -108,12 +150,19 @@ async def mobile_dashboard(
     return {
         "paciente": paciente_to_dict(paciente),
         "stats": {
-            "dias_jornada": paciente.dias_jornada,
-            "total_checkins": total_checkins,
-            "total_refeicoes": total_refeicoes,
-            "metas_concluidas": metas_concluidas
+            "dias_jornada": paciente.dias_jornada or 0,
+            "consultas_realizadas": consultas_realizadas,
+            "checkins_realizados": total_checkins,
+            "metas_atingidas": metas_atingidas,
+            "consistencia_mensal": round(consistencia_mensal, 2),
+            "frequencia_refeicoes_media": round(frequencia_refeicoes_media, 2),
+            "vegetais_frutas_media": round(vegetais_frutas_media, 2),
+            "ingestao_liquido_media": round(ingestao_liquido_media, 2),
+            "energia_fisica_media": round(energia_fisica_media, 2),
+            "qualidade_sono_media": round(qualidade_sono_media, 2),
+            "confianca_jornada_media": round(confianca_jornada_media, 2)
         },
-        "ultimo_checkin": ultimo_checkin.data.isoformat() if ultimo_checkin else None
+        "ultimo_checkin": ultimo_checkin.data.isoformat() if ultimo_checkin and ultimo_checkin.data else None
     }
 
 @app_router.post("/checkin")
@@ -122,11 +171,39 @@ async def create_checkin(
     paciente: Paciente = Depends(get_current_paciente),
     db: AsyncSession = Depends(get_db)
 ):
-    """Criar check-in diário"""
+    """Criar check-in diário - apenas um por dia"""
+    from sqlalchemy import func, cast, Date
+    
+    # Data do check-in (usar data atual se não fornecida)
+    checkin_date = datetime.now(timezone.utc)
+    if data.data:
+        try:
+            checkin_date = datetime.fromisoformat(data.data.replace('Z', '+00:00'))
+        except:
+            checkin_date = datetime.now(timezone.utc)
+    
+    # Verificar se já existe check-in hoje
+    # Converter data para apenas dia (sem hora) para comparação
+    checkin_date_only = checkin_date.date()
+    
+    result = await db.execute(
+        select(CheckIn).where(
+            CheckIn.paciente_id == paciente.id,
+            func.date(CheckIn.data) == checkin_date_only
+        )
+    )
+    existing_checkin = result.scalar_one_or_none()
+    
+    if existing_checkin:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Você já fez check-in hoje! Apenas um check-in por dia é permitido."
+        )
+    
     # Criar check-in
     checkin = CheckIn(
         paciente_id=paciente.id,
-        data=datetime.fromisoformat(data.data) if data.data else datetime.now(timezone.utc),
+        data=checkin_date,
         consistencia_plano=data.consistencia_plano,
         frequencia_refeicoes=data.frequencia_refeicoes,
         tempo_refeicao=data.tempo_refeicao,
@@ -145,7 +222,9 @@ async def create_checkin(
     
     # Atualizar último check-in do paciente
     paciente.last_checkin_at = datetime.now(timezone.utc)
-    paciente.dias_jornada = (paciente.dias_jornada or 0) + 1
+    # Só incrementar dias_jornada se for o primeiro check-in do dia
+    if not existing_checkin:
+        paciente.dias_jornada = (paciente.dias_jornada or 0) + 1
     
     await db.commit()
     await db.refresh(checkin)
