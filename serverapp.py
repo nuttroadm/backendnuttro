@@ -425,8 +425,22 @@ async def register_paciente(
                 detail="Data de nascimento inválida. Use o formato DD/MM/AAAA"
             )
     
-    # Criar paciente
+    # Buscar nutricionista admin padrão para pacientes auto-registrados (app mobile)
+    # Pacientes que se registram pelo app não têm nutricionista, então associamos ao admin
+    result = await db.execute(
+        select(Nutricionista).where(Nutricionista.email == "admin@nuttro.com")
+    )
+    admin_nutricionista = result.scalar_one_or_none()
+    
+    if not admin_nutricionista:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Erro interno: Nutricionista admin não encontrado"
+        )
+    
+    # Criar paciente associado ao admin (para pacientes auto-registrados pelo app)
     paciente = Paciente(
+        nutricionista_id=admin_nutricionista.id,  # Associar ao admin padrão
         cpf=cpf_clean,
         nome=data.nome,
         email=data.email,
