@@ -21,7 +21,7 @@ from ai_agents import (
 )
 from shared import (
     get_current_paciente, paciente_to_dict, PacienteCreate,
-    validate_cpf, get_password_hash, create_access_token
+    validate_cpf, get_password_hash, create_access_token, verify_password
 )
 from pydantic import BaseModel
 
@@ -364,4 +364,136 @@ async def get_chat_history(
         "content": m.content,
         "timestamp": m.created_at.isoformat() if m.created_at else None
     } for m in messages]
+
+# ============================================
+# ROTAS DE AUTENTICAÇÃO - PACIENTES
+# ============================================
+
+@auth_router.post("/paciente/register", status_code=status.HTTP_201_CREATED)
+async def register_paciente(
+    data: PacienteCreate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Registrar novo paciente"""
+    # Validar CPF
+    if not validate_cpf(data.cpf):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CPF inválido"
+        )
+    
+    # Limpar CPF (remover caracteres não numéricos)
+    cpf_clean = re.sub(r'[^0-9]', '', data.cpf)
+    
+    # Verificar se CPF já existe
+    result = await db.execute(
+        select(Paciente).where(Paciente.cpf == cpf_clean)
+    )
+    existing_cpf = result.scalar_one_or_none()
+    if existing_cpf:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CPF já cadastrado"
+        )
+    
+    # Verificar se email já existe (se fornecido)
+    if data.email:
+        result = await db.execute(
+            select(Paciente).where(Paciente.email == data.email)
+        )
+        existing_email = result.scalar_one_or_none()
+        if existing_email:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Email já cadastrado"
+            )
+    
+    # Converter data de nascimento (formato DD/MM/AAAA)
+    data_nascimento = None
+    if data.data_nascimento:
+        try:
+            # Formato esperado: DD/MM/AAAA
+            parts = data.data_nascimento.split('/')
+            if len(parts) == 3:
+                dia, mes, ano = parts
+                data_nascimento = datetime(int(ano), int(mes), int(dia), tzinfo=timezone.utc)
+        except (ValueError, IndexError):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Data de nascimento inválida. Use o formato DD/MM/AAAA"
+            )
+    
+    # Criar paciente
+    paciente = Paciente(
+        cpf=cpf_clean,
+        nome=data.nome,
+        email=data.email,
+        senha_hash=get_password_hash(data.senha),
+        telefone=data.telefone,
+        data_nascimento=data_nascimento,
+        sexo=data.sexo,
+        objetivo=data.objetivo,
+        status="novo",
+        kanban_status="novos"
+    )
+    
+    db.add(paciente)
+    await db.commit()
+    await db.refresh(paciente)
+    
+    # Criar token
+    access_token = create_access_token(
+        data={"sub": str(paciente.id), "type": "paciente"}
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": paciente_to_dict(paciente)
+    }
+
+@auth_router.post("/paciente/login")
+async def login_paciente(
+    data: LoginRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    """Login de paciente via CPF"""
+    if not data.cpf:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="CPF é obrigatório"
+        )
+    
+    # Limpar CPF
+    cpf_clean = re.sub(r'[^0-9]', '', data.cpf)
+    
+    # Buscar paciente
+    result = await db.execute(
+        select(Paciente).where(Paciente.cpf == cpf_clean)
+    )
+    paciente = result.scalar_one_or_none()
+    
+    if not paciente:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="CPF ou senha incorretos"
+        )
+    
+    # Verificar senha
+    if not verify_password(data.senha, paciente.senha_hash):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="CPF ou senha incorretos"
+        )
+    
+    # Criar token
+    access_token = create_access_token(
+        data={"sub": str(paciente.id), "type": "paciente"}
+    )
+    
+    return {
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user": paciente_to_dict(paciente)
+    }
 
