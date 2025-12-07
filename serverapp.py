@@ -409,6 +409,7 @@ async def register_paciente(
             )
     
     # Converter data de nascimento (formato DD/MM/AAAA)
+    # IMPORTANTE: A coluna no banco é TIMESTAMP WITHOUT TIME ZONE, então não usar tzinfo
     data_nascimento = None
     if data.data_nascimento:
         try:
@@ -416,7 +417,8 @@ async def register_paciente(
             parts = data.data_nascimento.split('/')
             if len(parts) == 3:
                 dia, mes, ano = parts
-                data_nascimento = datetime(int(ano), int(mes), int(dia), tzinfo=timezone.utc)
+                # Criar datetime sem timezone (naive) para TIMESTAMP WITHOUT TIME ZONE
+                data_nascimento = datetime(int(ano), int(mes), int(dia))
         except (ValueError, IndexError):
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
