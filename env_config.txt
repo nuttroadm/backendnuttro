@@ -1,0 +1,20 @@
+# RENOMEIE ESTE ARQUIVO PARA .env
+# Backend Solo Nuttro - Configuração
+
+# Banco de Dados PostgreSQL
+DATABASE_URL=postgresql+asyncpg://postgres:AoLcSmiQwJYUHltrLzhl@orderlymanatee-postgres.cloudfy.live:8856/db
+
+# Segurança
+SECRET_KEY=nuttro-solo-secret-key-2024-change-in-production
+
+# IA - OpenRouter (modelos gratuitos como Gemini)
+OPENROUTER_API_KEY=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
+
+# Evolution API (WhatsApp)
+EVOLUTION_API_URL=https://orderlymanatee-evolution.cloudfy.live
+EVOLUTION_API_KEY=LzKrIvkg0gI28IzfBjoROnFKjWyTgj54
+
+# Configurações opcionais
+DEBUG=false
+CORS_ORIGINS=http://localhost:3000,http://localhost:8081
+

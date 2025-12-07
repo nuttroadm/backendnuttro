@@ -1,0 +1,57 @@
+# ============================================
+# NUTTRO BACKEND - Variáveis de Ambiente
+# ============================================
+# Copie este conteúdo e cole nas variáveis de ambiente do Render
+# NUNCA commite valores reais no Git!
+
+# ============================================
+# DATABASE - PostgreSQL (OBRIGATÓRIO)
+# ============================================
+# Render fornece automaticamente quando você cria um PostgreSQL
+# Formato: postgresql+asyncpg://user:password@host:port/database
+DATABASE_URL=postgresql+asyncpg://user:password@host:port/database
+
+# ============================================
+# SECURITY - JWT (OBRIGATÓRIO)
+# ============================================
+# Gere uma chave forte: openssl rand -hex 32
+SECRET_KEY=your-secret-key-here-change-in-production
+
+# Algoritmo para JWT
+ALGORITHM=HS256
+
+# Tempo de expiração do token (em minutos)
+ACCESS_TOKEN_EXPIRE_MINUTES=1440
+
+# ============================================
+# GEMINI AI - Google Generative AI (OBRIGATÓRIO)
+# ============================================
+# Obtenha em: https://makersuite.google.com/app/apikey
+GEMINI_API_KEY=your-gemini-api-key
+
+# Modelo Gemini a usar
+GEMINI_MODEL=gemini-2.0-flash-exp
+
+# ============================================
+# EVOLUTION API - WhatsApp (OPCIONAL)
+# ============================================
+EVOLUTION_API_URL=https://orderlymanatee-evolution.cloudfy.live
+EVOLUTION_API_KEY=your-evolution-api-key
+
+# ============================================
+# GOOGLE OAUTH (OPCIONAL)
+# ============================================
+GOOGLE_CLIENT_ID=your-google-client-id.apps.googleusercontent.com
+
+# ============================================
+# SERVER CONFIGURATION
+# ============================================
+# Porta (Render define automaticamente via $PORT)
+PORT=10000
+
+# Ambiente
+ENVIRONMENT=production
+
+# CORS - URLs permitidas (separadas por vírgula)
+ALLOWED_ORIGINS=*
+
