@@ -39,7 +39,7 @@ else:
 # Modelos Groq
 # Modelos atualizados (llama-3.1-70b-versatile foi descontinuado)
 GROQ_MODEL_TEXT = "llama-3.1-8b-instant"  # Modelo rápido e eficiente para texto
-GROQ_MODEL_VISION = "llama-3.1-8b-instant"  # Para imagens, vamos usar descrição textual
+GROQ_MODEL_VISION = "llama-3.2-11b-vision-preview"  # Modelo com suporte a análise de imagens
 
 # ============================================
 # STATE SCHEMAS
@@ -102,7 +102,7 @@ def get_llm(model: str = None, temperature: float = 0.7) -> ChatGroq:
 # ============================================
 
 MEAL_ANALYSIS_PROMPT = """Você é Nuttro IA, um nutricionista virtual especializado em análise de refeições.
-Analise a refeição descrita abaixo com precisão nutricional.
+Analise a refeição descrita pelo usuário com MÁXIMA PRECISÃO e atenção aos detalhes.
 
 CONTEXTO DO PACIENTE:
 {patient_context}
@@ -110,29 +110,43 @@ CONTEXTO DO PACIENTE:
 PLANO ALIMENTAR ATUAL:
 {meal_plan}
 
-Sua análise deve:
-1. Identificar TODOS os alimentos presentes na descrição
-2. Estimar porções realistas baseado em tamanhos padrão (use medidas como: 1 xícara, 100g, 1 unidade média)
-3. Calcular macros aproximados em GRAMAS (proteínas, carboidratos, gorduras, fibras)
-4. Estimar calorias totais baseado nos alimentos e porções identificadas
-5. Avaliar alinhamento com o plano alimentar do paciente
-6. Dar feedback motivador e prático
-7. Sugerir melhorias se necessário
+DESCRIÇÃO DA REFEIÇÃO FORNECIDA PELO USUÁRIO:
+{descricao_refeicao}
+
+INSTRUÇÕES CRÍTICAS:
+1. Analise EXATAMENTE o que o usuário descreveu - não invente alimentos que não foram mencionados
+2. Identifique TODOS os alimentos mencionados na descrição acima
+3. Estime porções realistas baseado em tamanhos padrão brasileiros:
+   - Arroz branco cozido: 1 concha média = ~150g = ~200 calorias, 45g carboidratos, 4g proteína
+   - Ovo: 1 unidade média = ~60g = ~90 calorias, 6g proteína, 6g gordura
+   - Frango grelhado: 1 filé médio = ~100g = ~165 calorias, 31g proteína, 3.6g gordura
+   - Feijão cozido: 1 concha = ~100g = ~130 calorias, 8g proteína, 23g carboidratos
+   - Salada: 1 prato raso = ~100g = ~20-50 calorias (dependendo do tipo)
+4. Calcule macros em GRAMAS com precisão baseado nos alimentos identificados
+5. Estime calorias totais somando todos os alimentos
+6. Avalie alinhamento com o objetivo do paciente:
+   - Se objetivo é "perda de peso": verifique se está dentro das calorias recomendadas
+   - Se objetivo é "ganho de massa": verifique proteína suficiente
+   - Se objetivo é "manutenção": verifique equilíbrio nutricional
+7. Dê feedback ESPECÍFICO sobre a refeição descrita, não genérico
+8. Sugira melhorias práticas baseadas no que foi realmente consumido
 
 IMPORTANTE:
-- Use valores nutricionais médios para cada alimento
-- Seja preciso: uma xícara de arroz branco cozido tem ~200 calorias, 45g de carboidratos
+- NÃO invente alimentos que não foram mencionados
+- Se o usuário disse "arroz com ovo", analise APENAS arroz e ovo
+- Use valores nutricionais médios brasileiros para cada alimento
+- Seja específico: "Esta refeição de arroz com ovo fornece..." não "Uma refeição balanceada..."
 - Considere o objetivo do paciente ao avaliar
-- Seja positivo e encorajador
+- Seja positivo mas realista
 
 Responda APENAS em JSON válido, sem markdown, sem explicações, com a estrutura:
 {{
-    "itens": ["lista completa de alimentos identificados"],
-    "porcoes": {{"alimento": "porção estimada (ex: 1 xícara, 100g, 1 unidade)"}},
+    "itens": ["lista EXATA de alimentos mencionados na descrição"],
+    "porcoes": {{"alimento": "porção estimada (ex: 1 concha, 100g, 1 unidade)"}},
     "macros": {{"proteinas_g": 0.0, "carboidratos_g": 0.0, "gorduras_g": 0.0, "fibras_g": 0.0}},
     "calorias_estimadas": 0,
-    "feedback": "feedback motivador e prático",
-    "sugestoes": ["sugestões práticas de melhoria"],
+    "feedback": "feedback ESPECÍFICO sobre esta refeição específica, mencionando os alimentos reais",
+    "sugestoes": ["sugestões práticas baseadas nos alimentos realmente consumidos"],
     "alinhamento_plano": "excelente|bom|atencao"
 }}"""
 
@@ -203,8 +217,8 @@ Responda em JSON com:
     "motivo_alerta": "motivo se houver"
 }}"""
 
-CONSULTA_INSIGHT_PROMPT = """Você é um assistente de IA para nutricionistas.
-Prepare insights para auxiliar na próxima consulta.
+CONSULTA_INSIGHT_PROMPT = """Você é um assistente de IA especializado para nutricionistas.
+Prepare insights DETALHADOS e ESPECÍFICOS para auxiliar na próxima consulta deste paciente específico.
 
 DADOS DO PACIENTE:
 {patient_info}
@@ -221,15 +235,38 @@ METAS E PROGRESSO:
 ÚLTIMA CONSULTA:
 {last_consultation}
 
-Gere insights para o nutricionista:
-1. Resumo do progresso desde a última consulta
-2. Principais conquistas do paciente
-3. Desafios identificados nos dados
-4. Recomendações para ajustar o plano
-5. Sugestões de novas metas
-6. Pontos que precisam de atenção especial
+INSTRUÇÕES CRÍTICAS:
+1. Analise os dados ESPECÍFICOS deste paciente - não dê respostas genéricas
+2. Identifique padrões reais nos dados fornecidos (check-ins, refeições, metas)
+3. Compare o progresso atual com a última consulta registrada
+4. Seja específico: mencione números, datas, tendências reais
+5. Baseie suas recomendações nos dados reais, não em suposições
+6. Se não houver dados suficientes, indique isso claramente
 
-Responda em JSON estruturado."""
+Gere insights ESPECÍFICOS para este paciente:
+1. Resumo do progresso desde a última consulta (com números e datas específicas)
+2. Principais conquistas do paciente (baseadas nos dados reais)
+3. Desafios identificados nos dados (padrões observados, não genéricos)
+4. Recomendações para ajustar o plano (baseadas no objetivo e progresso real)
+5. Sugestões de novas metas (alinhadas com o objetivo e histórico)
+6. Pontos que precisam de atenção especial (alertas baseados em dados)
+
+IMPORTANTE:
+- NÃO use frases genéricas como "o paciente está progredindo bem"
+- Use dados específicos: "o paciente perdeu 2kg desde a última consulta em [data]"
+- Mencione alimentos específicos que aparecem nas refeições
+- Cite métricas reais dos check-ins
+- Seja prático e acionável
+
+Responda APENAS em JSON válido, sem markdown, com a estrutura:
+{{
+    "resumo_progresso": "resumo específico com números e datas",
+    "principais_conquistas": ["conquistas específicas baseadas em dados reais"],
+    "desafios_identificados": ["desafios específicos observados nos dados"],
+    "recomendacoes_plano": ["recomendações práticas baseadas no objetivo e progresso"],
+    "metas_sugeridas": [{{"meta": "nome", "prazo": "prazo", "motivo": "motivo baseado em dados"}}],
+    "pontos_atencao": ["pontos específicos que precisam de atenção"]
+}}"""
 
 # ============================================
 # AGENTE DE ANÁLISE DE REFEIÇÕES
@@ -243,51 +280,64 @@ class MealAnalysisAgent:
         self.parser = JsonOutputParser(pydantic_object=MealAnalysisResult)
     
     async def _describe_image_with_vision(self, image_base64: str) -> str:
-        """Usa Google Vision API para descrever a imagem com precisão"""
+        """Usa modelo de visão do Groq para descrever a imagem de alimentos"""
         try:
-            # Limpar base64
+            # Limpar base64 - remover prefixo data:image se presente
             if 'base64,' in image_base64:
                 image_base64 = image_base64.split('base64,')[1]
             
-            # Tentar usar Google Vision API se disponível
+            # Verificar se temos a API key
+            if not GROQ_API_KEY:
+                logger.warning("⚠️ GROQ_API_KEY não configurada para análise de visão")
+                return "Imagem não pôde ser analisada - API key não configurada"
+            
+            # Usar modelo de visão do Groq
             try:
-                from google.cloud import vision
-                import base64 as b64
+                vision_llm = ChatGroq(
+                    model=GROQ_MODEL_VISION,
+                    groq_api_key=GROQ_API_KEY,
+                    temperature=0.3
+                )
                 
-                # Verificar se há credenciais configuradas
-                vision_client = vision.ImageAnnotatorClient()
+                # Criar mensagem com imagem no formato multimodal
+                vision_prompt = """Você é um especialista em nutrição. Analise esta foto de refeição e descreva:
+
+1. TODOS os alimentos visíveis na imagem (seja específico: arroz branco, feijão preto, frango grelhado, etc.)
+2. Porções aproximadas (pouco, médio, bastante)
+3. Método de preparo visível (grelhado, frito, cozido, cru)
+
+Responda de forma direta e objetiva, listando os alimentos encontrados.
+Exemplo: "Arroz branco (porção média), feijão carioca (1 concha), frango grelhado (1 filé médio), salada de alface e tomate"
+
+Se não conseguir identificar alimentos ou a imagem não for de comida, diga claramente."""
                 
-                # Decodificar imagem
-                image_content = b64.b64decode(image_base64)
-                image = vision.Image(content=image_content)
+                message = HumanMessage(content=[
+                    {"type": "text", "text": vision_prompt},
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{image_base64}"
+                        }
+                    }
+                ])
                 
-                # Detectar objetos e texto
-                response = vision_client.label_detection(image=image, max_results=10)
-                labels = [label.description for label in response.label_annotations]
+                logger.info(f"🔍 Analisando imagem com modelo de visão {GROQ_MODEL_VISION}...")
+                response = await vision_llm.ainvoke([message])
                 
-                # Detectar texto (rótulos, ingredientes)
-                text_response = vision_client.text_detection(image=image)
-                texts = [text.description for text in text_response.text_annotations]
-                
-                # Combinar informações
-                description = f"Alimentos identificados: {', '.join(labels[:5])}"
-                if texts:
-                    description += f"\nTexto visível: {texts[0][:200]}"
+                description = response.content.strip()
+                logger.info(f"✅ Descrição da imagem: {description[:200]}...")
                 
                 return description
                 
-            except ImportError:
-                logger.warning("Google Vision API não disponível. Usando análise textual.")
             except Exception as e:
-                logger.warning(f"Erro ao usar Google Vision: {e}. Usando análise textual.")
-            
-            # Fallback: Pedir ao Groq para analisar baseado em características da imagem
-            # Vamos usar uma abordagem onde o frontend pode enviar uma descrição inicial
-            return "Imagem de alimento/refeição - análise detalhada necessária"
+                logger.error(f"Erro ao usar modelo de visão Groq: {e}")
+                import traceback
+                logger.error(traceback.format_exc())
+                return "Não foi possível analisar a imagem automaticamente. Por favor, descreva os alimentos."
             
         except Exception as e:
-            logger.error(f"Erro ao descrever imagem: {e}")
-            return "Imagem de refeição"
+            logger.error(f"Erro ao processar imagem: {e}")
+            return "Erro ao processar imagem"
     
     async def analyze(
         self, 
@@ -296,37 +346,36 @@ class MealAnalysisAgent:
         meal_plan: Dict = None,
         descricao: str = None
     ) -> Dict[str, Any]:
-        """Analisa uma imagem de refeição usando Groq com descrição textual"""
+        """Analisa uma refeição usando descrição textual ou imagem"""
         
         if not self.llm:
             return self._fallback_response()
         
         try:
             # Preparar contexto
-            context_str = json.dumps(patient_context, ensure_ascii=False, indent=2)
-            plan_str = json.dumps(meal_plan or {}, ensure_ascii=False, indent=2)
+            context_str = json.dumps(patient_context, ensure_ascii=False, indent=2) if patient_context else "Sem contexto do paciente"
+            plan_str = json.dumps(meal_plan or {}, ensure_ascii=False, indent=2) if meal_plan else "Sem plano alimentar definido"
             
-            # Gerar descrição da imagem (em produção, use uma API de visão real)
-            image_description = await self._describe_image_with_vision(image_base64)
+            # Priorizar descrição textual se fornecida
+            if descricao and descricao.strip():
+                descricao_refeicao = descricao.strip()
+                logger.info(f"📝 Analisando refeição por descrição textual: {descricao_refeicao[:100]}...")
+            elif image_base64:
+                # Gerar descrição da imagem (em produção, use uma API de visão real)
+                descricao_refeicao = await self._describe_image_with_vision(image_base64)
+                logger.info(f"📷 Analisando refeição por imagem")
+            else:
+                logger.warning("⚠️ Nenhuma descrição ou imagem fornecida")
+                return self._fallback_response()
             
-            # Criar prompt completo com descrição da imagem
+            # Criar prompt completo com descrição
             prompt = MEAL_ANALYSIS_PROMPT.format(
                 patient_context=context_str,
-                meal_plan=plan_str
+                meal_plan=plan_str,
+                descricao_refeicao=descricao_refeicao
             )
             
-            enhanced_prompt = f"""{prompt}
-
-DESCRIÇÃO DA REFEIÇÃO (baseado na imagem):
-{image_description}
-
-IMPORTANTE: 
-- Analise os alimentos descritos acima
-- Calcule macros e calorias baseado em valores nutricionais padrão
-- Seja preciso nas estimativas
-- Retorne APENAS JSON válido, sem markdown, sem explicações adicionais"""
-            
-            message = HumanMessage(content=enhanced_prompt)
+            message = HumanMessage(content=prompt)
             response = await self.llm.ainvoke([message])
             
             # Parse da resposta
@@ -381,7 +430,8 @@ class PatientChatAgent:
     """Agente de chat usando LangGraph para conversas contextuais"""
     
     def __init__(self):
-        self.llm = get_llm(temperature=0.7)
+        # Temperature reduzida para respostas mais consistentes
+        self.llm = get_llm(temperature=0.4)
         self.graph = self._build_graph()
     
     def _build_graph(self) -> StateGraph:
@@ -556,37 +606,73 @@ class ConsultaInsightAgent:
         goals: List[Dict],
         last_consultation: Dict = None
     ) -> Dict[str, Any]:
-        """Gera insights para auxiliar na consulta"""
+        """Gera insights ESPECÍFICOS para auxiliar na consulta deste paciente"""
         
         if not self.llm:
             return self._fallback_response()
         
         try:
-            # Resumir dados
+            # Preparar dados detalhados (não apenas resumos)
+            patient_info_str = json.dumps(patient_info, ensure_ascii=False, indent=2)
+            
+            # Resumir check-ins mas manter detalhes importantes
             checkins_summary = self._summarize_checkins(checkins)
+            if checkins:
+                # Adicionar informações sobre os últimos check-ins
+                ultimos_checkins = checkins[-5:] if len(checkins) > 5 else checkins
+                checkins_summary += f"\n\nÚltimos check-ins detalhados:\n{json.dumps(ultimos_checkins, ensure_ascii=False, indent=2)}"
+            
+            # Resumir refeições mas manter detalhes das últimas
             meals_summary = self._summarize_meals(meals)
+            if meals:
+                # Adicionar informações sobre as últimas refeições
+                ultimas_refeicoes = meals[-10:] if len(meals) > 10 else meals
+                refeicoes_detalhadas = []
+                for meal in ultimas_refeicoes:
+                    refeicoes_detalhadas.append({
+                        "data": meal.get("data"),
+                        "itens": meal.get("itens", []),
+                        "calorias": meal.get("calorias_estimadas"),
+                        "alinhamento": meal.get("alinhamento_plano")
+                    })
+                meals_summary += f"\n\nÚltimas refeições detalhadas:\n{json.dumps(refeicoes_detalhadas, ensure_ascii=False, indent=2)}"
+            
+            # Resumir metas mas manter detalhes
             goals_progress = self._summarize_goals(goals)
+            if goals:
+                goals_progress += f"\n\nMetas detalhadas:\n{json.dumps(goals, ensure_ascii=False, indent=2)}"
             
             prompt = CONSULTA_INSIGHT_PROMPT.format(
-                patient_info=json.dumps(patient_info, ensure_ascii=False, indent=2),
+                patient_info=patient_info_str,
                 checkins_summary=checkins_summary,
                 meals_summary=meals_summary,
                 goals_progress=goals_progress,
                 last_consultation=json.dumps(last_consultation or {}, ensure_ascii=False, indent=2)
             )
             
+            logger.info(f"📊 Gerando insights para paciente: {patient_info.get('nome', 'N/A')}")
             response = await self.llm.ainvoke([HumanMessage(content=prompt)])
             
             content = response.content.strip()
-            if content.startswith('```'):
-                content = content.split('\n', 1)[1]
+            if content.startswith('```json'):
+                content = content.replace('```json', '').replace('```', '').strip()
+            elif content.startswith('```'):
+                content = content.split('\n', 1)[1] if '\n' in content else content
                 if content.endswith('```'):
                     content = content.rsplit('\n', 1)[0]
             
-            return json.loads(content)
+            result = json.loads(content)
+            logger.info(f"✅ Insights gerados com sucesso")
+            return result
             
+        except json.JSONDecodeError as e:
+            logger.error(f"Erro ao fazer parse JSON nos insights: {e}")
+            logger.error(f"Resposta recebida: {response.content[:500] if 'response' in locals() else 'N/A'}")
+            return self._fallback_response()
         except Exception as e:
             logger.error(f"Erro ao gerar insights: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
             return self._fallback_response()
     
     def _summarize_checkins(self, checkins: List[Dict]) -> str:

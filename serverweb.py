@@ -250,10 +250,12 @@ async def register(
     await db.refresh(new_user)
     
     # Criar token
-    access_token = create_access_token(data={"sub": str(new_user.id)})
+    access_token = create_access_token(data={"sub": str(new_user.id), "type": "nutricionista"})
+    logger.info(f"🔑 Token criado no register (primeiros 30 chars): {access_token[:30]}...")
     
     return TokenResponse(
         access_token=access_token,
+        user_type="nutricionista",
         user=usuario_to_dict(new_user)
     )
 
@@ -334,10 +336,12 @@ async def login(
             raise HTTPException(status_code=400, detail="Email ou senha incorretos")
         
         logger.info(f"Login bem-sucedido: {email}")
-        access_token = create_access_token(data={"sub": str(user.id)})
+        access_token = create_access_token(data={"sub": str(user.id), "type": "nutricionista"})
+        logger.info(f"🔑 Token criado no login (primeiros 30 chars): {access_token[:30]}...")
         
         return TokenResponse(
             access_token=access_token,
+            user_type="nutricionista",
             user=usuario_to_dict(user)
         )
     except HTTPException:
@@ -389,10 +393,12 @@ async def google_login(
                 user.foto_url = foto_url
                 await db.commit()
         
-        access_token = create_access_token(data={"sub": str(user.id)})
+        access_token = create_access_token(data={"sub": str(user.id), "type": "nutricionista"})
+        logger.info(f"🔑 Token criado no Google login (primeiros 30 chars): {access_token[:30]}...")
         
         return TokenResponse(
             access_token=access_token,
+            user_type="nutricionista",
             user=usuario_to_dict(user)
         )
     except Exception as e:
@@ -1267,11 +1273,12 @@ async def analisar_refeicao_ia(
                     "restricoes": paciente.restricoes_alimentares or []
                 }
         
-        # Analisar refeição
+        # Analisar refeição - passar a descrição textual
         analise = await agent.analyze(
-            image_base64="",  # Apenas descrição por enquanto
+            image_base64="",  # Sem imagem, apenas descrição textual
             patient_context=patient_context,
-            meal_plan={}
+            meal_plan={},
+            descricao=request.descricao  # Passar a descrição fornecida pelo usuário
         )
         
         return {"analise": analise}

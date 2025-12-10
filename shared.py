@@ -14,7 +14,8 @@ from typing import Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import uuid
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Request
+from fastapi import Request as FastAPIRequest
 from fastapi.security import OAuth2PasswordBearer
 from pydantic import BaseModel, EmailStr
 
@@ -137,28 +138,65 @@ def paciente_to_dict(p: Paciente) -> dict:
 # ============================================
 
 async def get_current_nutricionista(
-    token: str = Depends(oauth2_scheme),
+    request: FastAPIRequest,
     db: AsyncSession = Depends(get_db)
 ) -> Nutricionista:
+    """Obtém nutricionista atual do token JWT - extrai token manualmente do header"""
     credentials_exception = HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
         detail="Credenciais inválidas",
         headers={"WWW-Authenticate": "Bearer"},
     )
+    
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    # Log imediato
+    logger.info(f"🔐 get_current_nutricionista chamado para: {request.url.path}")
+    
+    # Extrair token diretamente do header Authorization
+    authorization = request.headers.get("Authorization")
+    logger.info(f"   Authorization header: {authorization[:60] if authorization else 'NÃO ENCONTRADO'}...")
+    
+    if not authorization:
+        logger.warning("   ❌ Header Authorization não encontrado")
+        logger.warning(f"   Todos os headers: {list(request.headers.keys())}")
+        raise credentials_exception
+    
+    # Verificar formato Bearer
+    if not authorization.startswith("Bearer "):
+        logger.warning(f"   ❌ Formato inválido. Esperado 'Bearer <token>', recebido: {authorization[:50]}...")
+        raise credentials_exception
+    
+    # Extrair token
+    token = authorization.replace("Bearer ", "").strip()
+    logger.info(f"   ✅ Token extraído (primeiros 30 chars): {token[:30]}...")
+    
+    if not token or token == "None":
+        logger.warning("❌ Token vazio ou inválido")
+        raise credentials_exception
+    
     try:
         from jose import JWTError
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
         user_id: str = payload.get("sub")
         user_type: str = payload.get("type")
+        logger.info(f"   Token decodificado - user_id: {user_id}, type: {user_type}")
+        
         if not user_id or user_type != "nutricionista":
+            logger.warning(f"   ❌ Token inválido - user_id: {user_id}, type: {user_type}")
             raise credentials_exception
-    except JWTError:
+    except JWTError as e:
+        logger.error(f"   ❌ Erro ao decodificar token: {e}")
         raise credentials_exception
     
     result = await db.execute(select(Nutricionista).where(Nutricionista.id == uuid.UUID(user_id)))
     user = result.scalar_one_or_none()
     if not user:
+        logger.warning(f"   ❌ Nutricionista não encontrado: {user_id}")
         raise credentials_exception
+    
+    logger.info(f"✅ Nutricionista autenticado: {user.email}")
     return user
 
 async def get_current_paciente(
